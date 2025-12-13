@@ -15,13 +15,13 @@ class PostController extends Controller
     {
         $posts = [
             [
-                'userId' => $request->user()->id,
+                'userId' => 1,
                 'id' => 1,
                 'title' => 'Первый тестовый пост',
                 'body' => 'Это тело первого тестового поста. Здесь может быть любой текст.',
             ],
             [
-                'userId' => $request->user()->id,
+                'userId' => 1,
                 'id' => 2,
                 'title' => 'Второй тестовый пост',
                 'body' => 'Это тело второго тестового поста. Ещё один пример контента.',
