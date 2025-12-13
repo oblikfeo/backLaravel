@@ -21,8 +21,7 @@ Route::prefix('v1')->group(function () {
     Route::get('/posts', [PostController::class, 'index']); // Тестовый GET endpoint
 
     // OAuth роуты
-    Route::get('/auth/{provider}/redirect', [OAuthController::class, 'redirect']);
-    Route::get('/auth/{provider}/callback', [OAuthController::class, 'callback']);
+    Route::post('/auth/vkid/callback', [OAuthController::class, 'vkidCallback']);
 
     // Защищённые роуты (требуют авторизации)
     Route::middleware('auth:sanctum')->group(function () {
