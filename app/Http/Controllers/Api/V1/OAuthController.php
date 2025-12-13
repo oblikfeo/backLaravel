@@ -11,40 +11,17 @@ use Illuminate\Support\Facades\Http;
 class OAuthController extends Controller
 {
     /**
-     * Обмен VK ID code на токен и авторизация пользователя
+     * Авторизация пользователя через VK ID (принимает access_token от SDK)
      */
     public function vkidCallback(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'code' => 'required|string',
-            'device_id' => 'required|string',
+            'access_token' => 'required|string',
+            'user_id' => 'nullable|string',
         ]);
 
         try {
-            // Обмениваем code на access_token через VK ID API
-            $tokenResponse = Http::asForm()->post('https://id.vk.com/oauth/token', [
-                'grant_type' => 'authorization_code',
-                'code' => $validated['code'],
-                'client_id' => env('VK_CLIENT_ID'),
-                'client_secret' => env('VK_CLIENT_SECRET'),
-                'redirect_uri' => env('VK_REDIRECT_URI'),
-            ]);
-
-            if (!$tokenResponse->successful()) {
-                return response()->json([
-                    'message' => 'Ошибка обмена code на токен',
-                    'error' => $tokenResponse->json(),
-                ], 400);
-            }
-
-            $tokenData = $tokenResponse->json();
-            $accessToken = $tokenData['access_token'] ?? null;
-
-            if (!$accessToken) {
-                return response()->json([
-                    'message' => 'Не удалось получить access_token',
-                ], 400);
-            }
+            $accessToken = $validated['access_token'];
 
             // Получаем данные пользователя через VK API
             $userResponse = Http::get('https://api.vk.com/method/users.get', [
