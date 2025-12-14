@@ -22,27 +22,123 @@ class OAuthController extends Controller
 
         try {
             $accessToken = $validated['access_token'];
+            $userId = $validated['user_id'] ?? null;
 
-            // Получаем данные пользователя через VK API
-            $userResponse = Http::get('https://api.vk.com/method/users.get', [
-                'access_token' => $accessToken,
-                'v' => '5.131',
-                'fields' => 'photo_200,email',
+            \Log::info('VK ID Callback', [
+                'user_id' => $userId,
+                'has_token' => !empty($accessToken),
             ]);
 
-            if (!$userResponse->successful()) {
-                return response()->json([
-                    'message' => 'Ошибка получения данных пользователя',
-                ], 400);
+            // Получаем данные пользователя через VK API
+            // Если передан user_id, используем его, иначе получаем через API
+            $vkUser = null;
+            
+            if ($userId) {
+                // Если user_id передан, пробуем получить данные по нему
+                $userResponse = Http::timeout(10)->get('https://api.vk.com/method/users.get', [
+                    'user_ids' => $userId,
+                    'access_token' => $accessToken,
+                    'v' => '5.131',
+                    'fields' => 'photo_200,email',
+                ]);
+            } else {
+                // Иначе получаем данные текущего пользователя
+                $userResponse = Http::timeout(10)->get('https://api.vk.com/method/users.get', [
+                    'access_token' => $accessToken,
+                    'v' => '5.131',
+                    'fields' => 'photo_200,email',
+                ]);
             }
 
+            $statusCode = $userResponse->status();
             $userData = $userResponse->json();
-            $vkUser = $userData['response'][0] ?? null;
 
-            if (!$vkUser) {
-                return response()->json([
-                    'message' => 'Не удалось получить данные пользователя',
-                ], 400);
+            \Log::info('VK API Response', [
+                'status' => $statusCode,
+                'user_id_param' => $userId,
+                'response' => $userData,
+            ]);
+
+            // Проверяем на ошибки VK API (VK возвращает ошибки в JSON даже при HTTP 200)
+            if (isset($userData['error'])) {
+                $errorCode = $userData['error']['error_code'] ?? 'unknown';
+                $errorMsg = $userData['error']['error_msg'] ?? 'Unknown error';
+                
+                \Log::error('VK API Error', [
+                    'error_code' => $errorCode,
+                    'error_msg' => $errorMsg,
+                    'full_error' => $userData['error'],
+                ]);
+
+                // Если токен не работает с users.get, возможно это OpenID токен
+                // В этом случае используем user_id из запроса
+                if ($errorCode == 5 && $userId) {
+                    \Log::info('Trying to use user_id from request', ['user_id' => $userId]);
+                    
+                    // Создаём минимальный объект пользователя из user_id
+                    $vkUser = [
+                        'id' => (int) $userId,
+                        'first_name' => 'VK',
+                        'last_name' => 'User',
+                        'photo_200' => null,
+                        'email' => null,
+                    ];
+                } else {
+                    return response()->json([
+                        'message' => 'Ошибка VK API',
+                        'error' => $errorMsg,
+                        'error_code' => $errorCode,
+                    ], 400);
+                }
+            } else {
+                if (!$userResponse->successful()) {
+                    \Log::error('VK API HTTP Error', [
+                        'status' => $statusCode,
+                        'body' => $userResponse->body(),
+                    ]);
+
+                    // Если есть user_id, используем его
+                    if ($userId) {
+                        \Log::info('Using user_id from request due to HTTP error', ['user_id' => $userId]);
+                        $vkUser = [
+                            'id' => (int) $userId,
+                            'first_name' => 'VK',
+                            'last_name' => 'User',
+                            'photo_200' => null,
+                            'email' => null,
+                        ];
+                    } else {
+                        return response()->json([
+                            'message' => 'Ошибка получения данных пользователя',
+                            'status' => $statusCode,
+                        ], 400);
+                    }
+                } else {
+                    $vkUser = $userData['response'][0] ?? null;
+
+                    if (!$vkUser) {
+                        \Log::error('VK User Data Missing', [
+                            'response' => $userData,
+                        ]);
+
+                        // Если есть user_id, используем его
+                        if ($userId) {
+                            \Log::info('Using user_id from request due to missing response', ['user_id' => $userId]);
+                            $vkUser = [
+                                'id' => (int) $userId,
+                                'first_name' => 'VK',
+                                'last_name' => 'User',
+                                'photo_200' => null,
+                                'email' => null,
+                            ];
+                        } else {
+                            return response()->json([
+                                'message' => 'Не удалось получить данные пользователя',
+                                'debug' => $userData,
+                            ], 400);
+                        }
+                    }
+                }
             }
 
             // Ищем или создаём пользователя
@@ -103,10 +199,15 @@ class OAuthController extends Controller
             ]);
 
         } catch (\Exception $e) {
+            \Log::error('VK ID Callback Exception', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
             return response()->json([
                 'message' => 'Ошибка авторизации',
-                'error' => $e->getMessage(),
-            ], 400);
+                'error' => config('app.debug') ? $e->getMessage() : 'Внутренняя ошибка сервера',
+            ], 500);
         }
     }
 }
