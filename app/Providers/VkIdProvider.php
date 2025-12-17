@@ -10,9 +10,10 @@ class VkIdProvider extends AbstractProvider implements ProviderInterface
 {
     /**
      * VK ID OAuth endpoints
-     * VK использует id.vk.com для международной версии и id.vk.ru для российской
-     * Попробуем использовать .com, если не работает - можно переключить на .ru
+     * Для OAuth авторизации используется oauth.vk.com
+     * Для получения токена и userinfo используется id.vk.com
      */
+    protected string $authUrl = 'https://oauth.vk.com/authorize';
     protected string $baseUrl = 'https://id.vk.com';
     protected string $apiUrl = 'https://api.vk.com';
 
@@ -21,7 +22,7 @@ class VkIdProvider extends AbstractProvider implements ProviderInterface
      */
     protected function getAuthUrl($state): string
     {
-        return $this->buildAuthUrlFromBase($this->baseUrl . '/oauth/authorize', $state);
+        return $this->buildAuthUrlFromBase($this->authUrl, $state);
     }
     
     /**
@@ -76,7 +77,8 @@ class VkIdProvider extends AbstractProvider implements ProviderInterface
      */
     protected function getTokenUrl(): string
     {
-        return $this->baseUrl . '/oauth/token';
+        // Для получения токена используем oauth.vk.com
+        return 'https://oauth.vk.com/token';
     }
 
     /**
