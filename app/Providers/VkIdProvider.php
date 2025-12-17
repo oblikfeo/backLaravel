@@ -202,7 +202,7 @@ class VkIdProvider extends AbstractProvider implements ProviderInterface
     /**
      * {@inheritdoc}
      */
-    protected function getAccessTokenResponse($code)
+    public function getAccessTokenResponse($code)
     {
         try {
             $response = parent::getAccessTokenResponse($code);
