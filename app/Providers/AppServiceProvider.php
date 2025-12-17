@@ -22,22 +22,34 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         // Регистрируем кастомный VK ID провайдер для Socialite
-        Socialite::extend('vkid', function ($app) {
-            $config = $app['config']['services.vk'];
+        // Регистрируем только если конфигурация доступна
+        try {
+            $config = config('services.vk');
             
             // Проверяем наличие обязательных параметров
-            if (empty($config['client_id']) || empty($config['client_secret']) || empty($config['redirect'])) {
-                throw new \InvalidArgumentException('VK OAuth credentials are not configured. Please check your .env file.');
+            if (!empty($config['client_id']) && !empty($config['client_secret']) && !empty($config['redirect'])) {
+                Socialite::extend('vkid', function ($app) use ($config) {
+                    return Socialite::buildProvider(
+                        VkIdProvider::class,
+                        [
+                            'client_id' => $config['client_id'],
+                            'client_secret' => $config['client_secret'],
+                            'redirect' => $config['redirect'],
+                        ]
+                    );
+                });
+            } else {
+                \Log::warning('VK OAuth provider not registered: missing configuration', [
+                    'has_client_id' => !empty($config['client_id']),
+                    'has_client_secret' => !empty($config['client_secret']),
+                    'has_redirect' => !empty($config['redirect']),
+                ]);
             }
-            
-            return Socialite::buildProvider(
-                VkIdProvider::class,
-                [
-                    'client_id' => $config['client_id'],
-                    'client_secret' => $config['client_secret'],
-                    'redirect' => $config['redirect'],
-                ]
-            );
-        });
+        } catch (\Exception $e) {
+            \Log::error('Failed to register VK ID provider', [
+                'message' => $e->getMessage(),
+            ]);
+            // Не прерываем загрузку приложения, просто логируем ошибку
+        }
     }
 }

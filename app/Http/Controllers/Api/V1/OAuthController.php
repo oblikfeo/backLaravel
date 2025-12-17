@@ -57,13 +57,28 @@ class OAuthController extends Controller
     /**
      * Перенаправление на VK ID для авторизации
      */
-    public function vkidRedirect(): \Illuminate\Http\RedirectResponse
+    public function vkidRedirect(): JsonResponse|\Illuminate\Http\RedirectResponse
     {
         try {
             \Log::info('VK ID Redirect called', [
                 'ip' => request()->ip(),
                 'user_agent' => request()->userAgent(),
             ]);
+            
+            // Проверяем конфигурацию перед использованием
+            $config = config('services.vk');
+            if (empty($config['client_id']) || empty($config['client_secret']) || empty($config['redirect'])) {
+                \Log::error('VK OAuth configuration missing', [
+                    'has_client_id' => !empty($config['client_id']),
+                    'has_client_secret' => !empty($config['client_secret']),
+                    'has_redirect' => !empty($config['redirect']),
+                ]);
+                
+                return response()->json([
+                    'message' => 'VK OAuth не настроен. Проверьте переменные окружения VK_CLIENT_ID, VK_CLIENT_SECRET, VK_REDIRECT_URI',
+                    'error' => 'configuration_missing',
+                ], 500);
+            }
             
             $redirectUrl = Socialite::driver('vkid')
                 ->stateless() // Для API без сессий
@@ -76,12 +91,28 @@ class OAuthController extends Controller
             ]);
             
             return redirect($redirectUrl);
-        } catch (\Exception $e) {
-            \Log::error('VK ID Redirect Exception', [
+        } catch (\InvalidArgumentException $e) {
+            \Log::error('VK ID Redirect Configuration Error', [
                 'message' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
-            throw $e;
+            
+            return response()->json([
+                'message' => 'Ошибка конфигурации VK OAuth',
+                'error' => $e->getMessage(),
+            ], 500);
+        } catch (\Exception $e) {
+            \Log::error('VK ID Redirect Exception', [
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            
+            return response()->json([
+                'message' => 'Ошибка при перенаправлении на VK',
+                'error' => config('app.debug') ? $e->getMessage() : 'Внутренняя ошибка сервера',
+            ], 500);
         }
     }
 
