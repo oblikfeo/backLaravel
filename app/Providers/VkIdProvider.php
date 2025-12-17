@@ -10,10 +10,8 @@ class VkIdProvider extends AbstractProvider implements ProviderInterface
 {
     /**
      * VK ID OAuth endpoints
-     * Для OAuth авторизации используется oauth.vk.com
-     * Для получения токена и userinfo используется id.vk.com
+     * Для VK ID используется id.vk.com с OAuth 2.1
      */
-    protected string $authUrl = 'https://oauth.vk.com/authorize';
     protected string $baseUrl = 'https://id.vk.com';
     protected string $apiUrl = 'https://api.vk.com';
 
@@ -22,7 +20,8 @@ class VkIdProvider extends AbstractProvider implements ProviderInterface
      */
     protected function getAuthUrl($state): string
     {
-        return $this->buildAuthUrlFromBase($this->authUrl, $state);
+        // VK ID использует /oauth/authorize на id.vk.com
+        return $this->buildAuthUrlFromBase($this->baseUrl . '/oauth/authorize', $state);
     }
     
     /**
@@ -49,12 +48,18 @@ class VkIdProvider extends AbstractProvider implements ProviderInterface
         $fields = parent::getCodeFields($state);
         
         // VK ID требует scope для OAuth 2.1
-        // Используем openid для базовой авторизации и email для получения email
+        // Для базовой авторизации используем только openid
+        // Email можно запросить отдельно, если нужно
         // Важно: scope должен быть строкой с пробелами, не массивом
-        $fields['scope'] = 'openid email';
+        $fields['scope'] = 'openid';
         
         // Убеждаемся, что response_type = code (для Authorization Code Flow)
         $fields['response_type'] = 'code';
+        
+        // VK ID может требовать версию API
+        if (!isset($fields['v'])) {
+            $fields['v'] = '5.199';
+        }
         
         // Убеждаемся, что redirect_uri передается (должен совпадать с настройками в VK)
         if (empty($fields['redirect_uri'])) {
@@ -77,8 +82,8 @@ class VkIdProvider extends AbstractProvider implements ProviderInterface
      */
     protected function getTokenUrl(): string
     {
-        // Для получения токена используем oauth.vk.com
-        return 'https://oauth.vk.com/token';
+        // VK ID использует /oauth/token на id.vk.com
+        return $this->baseUrl . '/oauth/token';
     }
 
     /**
