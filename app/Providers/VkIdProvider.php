@@ -10,18 +10,20 @@ class VkIdProvider extends AbstractProvider implements ProviderInterface
 {
     /**
      * VK ID OAuth endpoints
-     * Для VK ID используется id.vk.com с OAuth 2.1
+     * Согласно документации VK: https://oauth.vk.com/authorize для авторизации
      */
-    protected string $baseUrl = 'https://id.vk.com';
+    protected string $authUrl = 'https://oauth.vk.com/authorize';
+    protected string $baseUrl = 'https://id.vk.com'; // Для получения userinfo через OpenID
     protected string $apiUrl = 'https://api.vk.com';
+    protected string $tokenUrl = 'https://oauth.vk.com/access_token'; // Согласно документации
 
     /**
      * {@inheritdoc}
      */
     protected function getAuthUrl($state): string
     {
-        // VK ID использует /oauth/authorize на id.vk.com
-        return $this->buildAuthUrlFromBase($this->baseUrl . '/oauth/authorize', $state);
+        // Используем oauth.vk.com/authorize согласно документации VK
+        return $this->buildAuthUrlFromBase($this->authUrl, $state);
     }
     
     /**
@@ -47,18 +49,22 @@ class VkIdProvider extends AbstractProvider implements ProviderInterface
     {
         $fields = parent::getCodeFields($state);
         
-        // VK ID требует scope для OAuth 2.1
-        // Для базовой авторизации используем только openid
-        // Email можно запросить отдельно, если нужно
-        // Важно: scope должен быть строкой с пробелами, не массивом
-        $fields['scope'] = 'openid';
+        // Согласно документации VK: scope - битовое представление или строка
+        // Для обычной авторизации можно использовать пустой scope или указать нужные права
+        // Если нужен email, можно добавить, но для начала используем минимальный scope
+        if (!isset($fields['scope']) || empty($fields['scope'])) {
+            $fields['scope'] = ''; // Пустой scope для базовой авторизации
+        }
         
         // Убеждаемся, что response_type = code (для Authorization Code Flow)
         $fields['response_type'] = 'code';
         
-        // VK ID может требовать версию API
-        if (!isset($fields['v'])) {
-            $fields['v'] = '5.199';
+        // Версия API согласно документации: v=5.199
+        $fields['v'] = '5.199';
+        
+        // display параметр (опционально, но может помочь)
+        if (!isset($fields['display'])) {
+            $fields['display'] = 'page';
         }
         
         // Убеждаемся, что redirect_uri передается (должен совпадать с настройками в VK)
@@ -82,8 +88,8 @@ class VkIdProvider extends AbstractProvider implements ProviderInterface
      */
     protected function getTokenUrl(): string
     {
-        // VK ID использует /oauth/token на id.vk.com
-        return $this->baseUrl . '/oauth/token';
+        // Согласно документации VK: https://oauth.vk.com/access_token
+        return $this->tokenUrl;
     }
 
     /**
